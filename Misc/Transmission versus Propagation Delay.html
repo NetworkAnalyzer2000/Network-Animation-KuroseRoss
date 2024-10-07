@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<!-- saved from url=(0065)https://www2.tkn.tu-berlin.de/teaching/rn/animations/propagation/ -->
+<html class=" js no-flexbox flexbox-legacy canvas canvastext webgl no-touch geolocation postmessage no-websqldatabase indexeddb hashchange history draganddrop websockets rgba hsla multiplebgs backgroundsize borderimage borderradius boxshadow textshadow opacity cssanimations csscolumns cssgradients cssreflections csstransforms csstransforms3d csstransitions fontface generatedcontent video audio localstorage sessionstorage webworkers no-applicationcache svg inlinesvg smil svgclippaths"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+	  
+	<title>Transmission versus Propagation Delay</title>
+	<!-- tested with:
+		* mozilla firefox 10 (linux)
+		* android stock browser (ics 4.0.3)
+		* opera mobile 12.0.ADR (android ics)
+		* internet explorer 9.0.8112 (32bit on win7 64bit)
+		* internet explorer 9.0.8112 (64bit on win7)
+		* google chrome 17.0 (linux)
+		* apple safari 5.1.2 (win7)
+	-->
+	<meta http-equiv="X-UA-Compatible" content="IE=Edge">
+	<link rel="stylesheet" type="text/css" media="screen" href="./Transmission versus Propagation Delay_files/style.css">
+	<link rel="stylesheet" type="text/css" media="screen" href="./Transmission versus Propagation Delay_files/jquery-ui-1.8.18.custom.css">
+	<style type="text/css">
+		ul.menu{
+			padding-left: 0px;
+		}
+		ul.menu > li{
+			list-style-type: none;
+		}
+		
+		
+		g.sendrec .top{
+			fill: #00adef !important;
+		}
+		g.sendrec .side{
+			fill: #80d6f7 !important;
+		}
+		g.sendrec .front{
+			fill: #cceffc !important;
+		}
+		
+	</style>  
+	<script type="text/javascript" src="./Transmission versus Propagation Delay_files/jquery-1.7.1.min.js.download"></script>
+	<script type="text/javascript" src="./Transmission versus Propagation Delay_files/modernizr.js.download"></script>
+	<script type="text/javascript" src="./Transmission versus Propagation Delay_files/global.js.download"></script>
+	<script type="text/javascript" src="./Transmission versus Propagation Delay_files/jquery-ui-1.8.18.custom.min.js.download"></script>
+	<script>
+		$(window).load(function(){
+			checkFeatures({
+				inlinesvg: true,
+				canvas: false
+			});
+			
+			init();
+		});
+		
+		/* constants */
+		var lineLength = 502;
+		var linePadding = 48;
+		var delay = 50;
+		
+		var tick = 1E-5;
+
+		/* globals */
+		var running = false;
+		var timer;
+		
+		var packet;
+		var timetext;
+		var proptimetext;
+		var sender;
+		var receiver;
+		
+		var startButton;
+		
+		var length;
+		var rate;
+		var size;
+		var time;
+		var emissionTime;
+		var propagation = 2.8E+8;
+
+		function init(){
+			startButton = document.getElementById('startButton');
+			$(startButton).removeAttr('disabled');
+			
+			svgElement = document.getElementById('svg2');
+			packet = document.getElementById('packet');
+			timetext = document.getElementById('timetext');
+			proptimetext = document.getElementById('proptimetext');
+			sender = document.getElementById('sender');
+			receiver = document.getElementById('receiver');
+		}
+
+		function startAnim(){   
+			if(running == true){   
+				clearInterval(timer);
+			}
+			
+			// read selected values
+			length = Number(document.getElementById('lengthSelect').value)*1000;
+			rate = Number(document.getElementById('rateSelect').value);
+			size = Number(document.getElementById('sizeSelect').value);
+			propagation = Number(document.getElementById('propagation').value)*1E8;
+			
+			packet.setAttribute("visibility", "visible");
+			
+			time = 0;
+			emissionTime = 0;
+			
+			
+			//compute packet length
+			var packetLength = (size/rate)*propagation*lineLength/length;
+			packet.setAttribute("x", -packetLength);
+			packet.setAttribute("width", packetLength);
+			
+			timer = setInterval(doAnim, delay);
+			startButton.startButtonClicked = true;
+		}
+
+		function doAnim(){       
+			if (packet.getAttribute("x") >= lineLength+linePadding){
+				clearInterval(timer);
+				running = false;
+				receiver.setAttribute('class', '');
+				return;
+			}
+			
+			//compute time units
+			var xfirst = time-emissionTime;
+			var xlast = xfirst-(size/rate);
+			
+			//compute position
+			xfirst=xfirst*propagation*lineLength/length;
+			xlast=xlast*propagation*lineLength/length;
+			
+			if(xlast < 0)
+				xlast = 0;
+			
+			var width = Math.max((Math.min(xfirst, (lineLength)) - xlast), 0);
+			
+			packet.setAttribute('width', width);
+
+			//draw
+			packet.setAttribute('x', xlast+linePadding);
+			
+			
+			timetext.textContent = "total delay: " + (time*1000).toFixed(3) + " ms";
+			if(xfirst <= lineLength){
+				proptimetext.textContent = "propagation delay: " + (time*1000).toFixed(3) + " ms";
+			}
+			
+			
+			sender.setAttribute('class', (xlast <= 0) ? 'sendrec' : '');
+			receiver.setAttribute('class', (xfirst >= lineLength) ? 'sendrec' : '');
+			
+			time += tick;
+		}
+		
+		$(document).ready(function(){
+			rangeInputCompability();
+		});
+		
+		function preFix(n){
+			if(n >= 1e9)
+				return (n/1e9)+' g';
+			if(n >= 1e6)
+				return (n/1e6)+' m';
+			if(n >= 1e3)
+				return (n/1000)+' k';
+			return n+' ';
+		}
+	</script>  
+</head>
+
+<body>
+	<h1>Transmission vs Propagation Delay</h1>
+	<p>This animation illustrates the difference between transmission and propagation delay.</p>
+	<p>You can set the length of the link, the packet size, the transmission speed, the propagation speed of the link; The animation shows the packet being sent from sender to receiver<br>
+	Note that for many combinations, the head of the packet reaches the receiver before transmission is finished at the sender. </p>
+	
+	<form class="config">
+		<h2>configuration</h2>
+		<div class="form-item">
+			<h3><label for="lengthSelect">length</label></h3>
+			
+			<input type="range" value="10" min="10" max="1000" step="2" id="lengthSelect" onchange="$(&#39;#lengthSelect2&#39;).attr(&#39;value&#39;, this.value + &#39; km&#39;);">
+			<input type="text" value="10 km" id="lengthSelect2" disabled="disabled" size="7">
+			
+			<div class="description">sets the distance between sender and receiver in km</div>
+		</div>
+		<div class="form-item">
+			<h3><label for="rateSelect">rate</label></h3>
+			
+			<input type="range" value="500000" min="500000" max="1000000000" step="500000" id="rateSelect" onchange="$(&#39;#rateSelect2&#39;).attr(&#39;value&#39;, preFix(this.value)+&#39;bps&#39;);">
+			<input type="text" value="500 kbps" id="rateSelect2" disabled="disabled" size="11">
+			
+			<div class="description">sets the data rate</div>
+		</div>
+		
+		<div class="form-item">
+			<h3><label for="propagation">propagation</label></h3>
+			
+			<input type="range" value="2.8" min="1.0" max="2.9" step="0.1" id="propagation" onchange="$(&#39;#propagation2&#39;).attr(&#39;value&#39;, this.value.toString()+&#39;e8 m/s&#39;);">
+			<input type="text" value="2.8e8 m/s" id="propagation2" disabled="disabled" size="9">
+			
+			<div class="description">sets the propagation speed</div>
+		</div>
+		
+		<div class="form-item">
+			<h3><label for="sizeSelect">size</label></h3>
+			
+			<select id="sizeSelect">
+				<option value="8E2">100 Bytes</option>
+				<option value="4E3">500 Bytes</option>
+				<option value="8E3">1 kBytes</option>
+			</select>
+			<div class="description">sets the size of the data</div>
+		</div>
+		<div class="form-item">
+			<h3><label for="startButton">start</label></h3>
+			<button id="startButton" type="button" onclick="startAnim();">Start</button>
+			<div class="description">starts or restarts the simulation</div>
+		</div>
+	</form>
+
+<div class="simulation" style="width: 800px">
+<svg xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:svg="http://www.w3.org/2000/svg" xmlns="http://www.w3.org/2000/svg" version="1.1" width="800" height="80" viewBox="0 0 600 60" id="svg2">
+  <defs id="defs4">
+    <mask id="mask3866">
+      <rect width="502" height="10" x="48" y="32" id="packetmask" style="fill:#ffffff;fill-opacity:1;stroke:none"></rect>
+    </mask>
+  </defs>
+  <metadata id="metadata7">
+    <rdf:rdf>
+      <cc:work rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"></dc:type>
+        <dc:title></dc:title>
+      </cc:work>
+    </rdf:rdf>
+  </metadata>
+  <g transform="matrix(0.23437498,0,0,0.33018868,-25.349729,-217.99218)" id="sender" class="">
+    <rect width="170" height="85" x="129.49219" y="741.77625" id="rect4024" style="fill:#a7a5a6;fill-opacity:1;stroke:none" class="front"></rect>
+    <path d="m 299.4922,826.7763 22,-21 0,-85 -22,21 z" id="path4026" style="fill:#d3d2d2;fill-opacity:1;stroke:none" class="side"></path>
+    <path d="m 151.49219,720.7763 170.00001,0 -22,21 -170.00001,0 z" id="path4028" style="fill:#7b7979;fill-opacity:1;stroke:none" class="top"></path>
+  </g>
+  <rect width="502.99997" height="11" x="47.5" y="31.5" id="rect3851" style="fill:#ffffff;fill-opacity:1;stroke:#000000;stroke-width:0.99999982;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"></rect>
+  <g transform="matrix(0.23437498,0,0,0.33018868,519.65027,-217.99218)" id="receiver" class="">
+    <rect width="170" height="85" x="129.49219" y="741.77625" id="rect4024-8" style="fill:#a7a5a6;fill-opacity:1;stroke:none" class="front"></rect>
+    <path d="m 299.4922,826.7763 22,-21 0,-85 -22,21 z" id="path4026-0" style="fill:#d3d2d2;fill-opacity:1;stroke:none" class="side"></path>
+    <path d="m 151.49219,720.7763 170.00001,0 -22,21 -170.00001,0 z" id="path4028-4" style="fill:#7b7979;fill-opacity:1;stroke:none" class="top"></path>
+  </g>
+  <text x="300" y="55.815918" id="text3853" xml:space="preserve" text-anchor="middle" style="font-size:13px;font-style:normal;font-weight:normal;line-height:124.00000095%;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;font-family:Sans"><tspan x="300" y="55.815918" id="timetext">total delay: 1.640 ms</tspan></text>
+  <text x="300" y="20" id="text3853" xml:space="preserve" text-anchor="middle" style="font-size:13px;font-style:normal;font-weight:normal;line-height:124.00000095%;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;font-family:Sans"><tspan x="300" y="28" id="proptimetext">propagation delay: 0.030 ms</tspan></text>
+  <text x="9.1430664" y="18.815918" id="text3853-6" xml:space="preserve" style="font-size:13px;font-style:normal;font-weight:normal;line-height:124.00000095%;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;font-family:Sans"><tspan x="9.1430664" y="18.815918" mask="url(#mask3866)" id="timetext-5">Sender</tspan></text>
+  <text x="538.72412" y="18.815918" id="text3853-6-3" xml:space="preserve" style="font-size:13px;font-style:normal;font-weight:normal;line-height:124.00000095%;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;font-family:Sans"><tspan x="538.72412" y="18.815918" id="timetext-5-1">Receiver</tspan></text>
+  <rect width="0" height="10" x="610.2400000000501" y="32" id="packet" style="fill:#00adef;fill-opacity:1;stroke:none" visibility="visible"></rect>
+</svg>
+</div>
+
+<p>coded by Johannes Kessler 2012 based on the <a href="http://media.pearsoncmg.com/aw/aw_kurose_network_2/applets/transmission/delay.html">applet by David Grangier</a></p>
+
+<p>(Adopted and full credit attributed to Telecommunication Networks (TKN) at TU Berlin)</p>
+
+</body></html>

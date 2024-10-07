@@ -1,0 +1,32 @@
+ 
+.tracer{
+	position: relative;
+	width: 100px;
+	height: 100px;
+	overflow: hidden;
+}
+
+.tracer *{
+	position: absolute;
+	top: 0px;
+	left: 0px;
+}
+.tracer > .visible{
+	overflow: hidden;
+	border-bottom: 2px solid #ff00ff;
+}
+
+.tracer .desc{
+	position: absolute;
+	border-top: 1px solid black;
+	top: 0px;
+	left: auto;
+	right: auto;
+	
+	font: 12px;
+	
+	padding-bottom: 1px;
+}
+.tracer .desc > div.line{
+	
+}

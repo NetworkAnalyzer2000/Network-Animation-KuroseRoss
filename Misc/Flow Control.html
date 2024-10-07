@@ -1,0 +1,501 @@
+
+<!-- saved from url=(0058)https://www2.tkn.tu-berlin.de/teaching/rn/animations/flow/ -->
+<html class=" js no-flexbox flexbox-legacy canvas canvastext webgl no-touch geolocation postmessage no-websqldatabase indexeddb hashchange history draganddrop websockets rgba hsla multiplebgs backgroundsize borderimage borderradius boxshadow textshadow opacity cssanimations csscolumns cssgradients cssreflections csstransforms csstransforms3d csstransitions fontface generatedcontent video audio localstorage sessionstorage webworkers no-applicationcache svg inlinesvg smil svgclippaths"><head><meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+		<title>Flow Control</title>
+		<link rel="stylesheet" type="text/css" media="screen" href="./Flow Control_files/style.css">
+		<link rel="stylesheet" type="text/css" media="screen" href="./Flow Control_files/tracer.css">
+		<link rel="stylesheet" type="text/css" media="screen" href="./Flow Control_files/jquery-ui-1.8.18.custom.css">
+		<style type="text/css">
+			.simulation{
+				width: 1000px;
+				height: 600px;
+				position: relative;
+			}
+			
+			
+			.simulation > *{
+				position: absolute;
+				top: 0px;
+				left: 0px;
+			}
+			
+			.simulation > div:not(.tracer){
+				top: 500px;
+				background-color: white;
+				margin: 3px;
+				font-weight: bold;
+			}
+			.simulation > #receiver{
+				left: auto;
+				right: 0px;
+			}
+			.simulation > div > .buffer{
+				display: block;
+				border: 1px solid black;
+				height: auto;
+				width: 200px;
+				
+				padding: 2px;
+				text-shadow: 1px 1px silver;
+			}
+			.simulation > div > .buffer > span{
+				display: block;
+				width: 0%;
+				height: 2em;
+				background-color: green;
+				text-align: center;
+			}
+			
+			
+			.legend .dscColor{
+				display: inline-block;
+				width: 32px;
+			}
+		</style>
+		
+		<link rel="stylesheet" type="text/css" media="screen" href="./Flow Control_files/jquery-ui-1.8.18.custom.css">
+		<script type="text/javascript" src="./Flow Control_files/jquery-1.7.1.min.js.download"></script>
+		<script type="text/javascript" src="./Flow Control_files/jquery-ui-1.8.18.custom.min.js.download"></script>
+		<script type="text/javascript" src="./Flow Control_files/modernizr.js.download"></script>
+		<!--script type="text/javascript" src="../global/js/jquery.animate-enhanced.min.js"></script-->
+		<script type="text/javascript" src="./Flow Control_files/jquery-ui-1.8.18.custom.min.js.download"></script>
+		<script type="text/javascript" src="./Flow Control_files/global.js.download"></script>
+		<script type="text/javascript" src="./Flow Control_files/tracer.js.download"></script>
+		<script type="text/javascript">
+
+var pxPerSec = 20;
+$(document).ready(function(){
+	checkFeatures({
+		inlinesvg: false,
+		canvas: true
+	});
+	
+	rangeInputCompability();
+	disableFormItems(true, 1);
+	
+	
+	var tra = new Tracer({
+		container: document.getElementById("canvas-container"),
+		height: 600,
+		width: 1000,
+		left: 200,
+		right: 800,
+		pxPerSec: pxPerSec,
+		style: {
+			ack: {
+				fillStyle: '#006A00'
+			},
+			pkg: {
+				fillStyle: '#00adef'
+			}
+		}
+	});
+	flowControl(tra);
+	tra.update();
+	
+	var running = false;
+	
+	$('#start').click(function(){
+		if(running === true){
+			stop();
+		}
+		else{ // start
+			flowControl(tra);
+			tra.update();
+			
+			
+			
+			// reset buffers
+			$('.buffer > span').css({'width': '0%'});
+			$('#senderApp > span').css({'width': '100%'});
+			
+			var time = tra.getEndTime()+30;
+			tra.addEvent({time: time, callback: 
+				function(){
+					stop();
+				}
+			});
+			
+			tra.startScrolling(time);
+			
+			// lock config
+			disableFormItems(true, 0);
+			
+			// unlock pause
+			disableFormItems(false, 1);
+			
+			$('#pause').val('pause');
+			$('#start').val('stop');
+			
+			running = true;
+		}
+	});
+	
+	
+	$('#pause').click(function(){
+		if(running === true){ // stop
+			tra.stopScrolling();
+			
+			$('#start').val('restart');
+			$(this).val('resume');
+		}
+		else{ // resume
+			tra.startScrolling(tra.getEndTime()+30);
+			
+			$(this).val('pause');
+			$('#start').val('stop');
+		}
+		running = !running;
+	});
+	
+	function start(){
+		
+	}
+	function stop(){
+		tra.stopScrolling();
+			
+		disableFormItems(false, 0);
+		
+		// lock pause
+		disableFormItems(true, 1);
+		
+		$('#start').val('restart');
+		$('#pause').val('pause');
+		
+		running = false;
+	}
+});
+
+
+function Buffer(){
+	this.first = 0;
+	this.last = 0;
+	this.getLength = function(){
+		return this.last - this.first
+	}
+	this.take = function(length){
+		this.first += length;
+	}
+	this.put = function(length){
+		this.last += length;
+	}
+}
+
+function flowControl(tracer){
+	tracer.reset();
+	
+	var fileSize = parseInt(document.getElementById('fileSize').value);
+	var bufferSize = parseInt(document.getElementById('bufferSize').value);
+	var propagationTime = parseInt(document.getElementById('propagationTime').value)*pxPerSec;
+	
+	var ackLength = 2;
+	var consumeLength = 2048;
+	var bufferAnimationDuration = 300;
+	
+	var senderApp = new Buffer();
+	senderApp.put(fileSize);
+	
+	var senderBuffer = new Buffer();
+	
+	var receiverApp = new Buffer();
+	var receiverBuffer = new Buffer();
+	
+	var packet = new Buffer();
+	
+	
+	var ackReceived = true;
+	var advertisedWindow = bufferSize;
+	var consumeTime = 10 + 180*Math.random();
+	var lastAckReceived = 0;
+	var scaling = 1/30;
+	
+	var time = 0;
+	var states = {
+		fillSenderBuffer: 0,
+		sendPkt: 1,
+		receivePkt: 2,
+		receiveAck: 3,
+		tryConsume: 5,
+		exit: 99
+	};
+	var state = 0;
+	while(true){
+		switch(state){
+			case states.fillSenderBuffer: {
+				// senderApp > senderBuffer
+				if(senderApp.getLength() > 0 && senderBuffer.getLength() < bufferSize){
+					var length;
+					if(senderApp.getLength() < bufferSize)
+						length = senderApp.getLength();
+					else
+						length = bufferSize;
+						
+					length = Math.min(length, (bufferSize-senderBuffer.getLength()));
+					
+					senderBuffer.put(length);
+					senderApp.take(length);
+					
+					tracer.addDesc({
+						time: time, 
+						text: 'sender puts '+length+' bytes to buffer',
+						startLeft: true,
+						leftSide: true
+					});
+					
+					tracer.addEvent({time: time, callback: 
+						// http://onemarco.com/2008/11/12/callbacks-and-binding-and-callback-arguments-and-references/
+						(function breakReference(width, width2){
+							return function callbackProxy(){
+								$('#senderApp > span').animate({'width': width+'%'}, bufferAnimationDuration);
+								$('#senderBuffer > span').animate({'width': width2+'%'}, bufferAnimationDuration);
+							};
+						})( 
+							senderApp.getLength()/fileSize*100, 
+							senderBuffer.getLength()/bufferSize*100
+						)
+					});
+				}
+				state = states.sendPkt;
+				break;
+			}
+			case states.sendPkt: {
+				var length, displayLength;
+				
+				length = Math.max(1, Math.min(advertisedWindow, senderBuffer.getLength()));
+				displayLength = Math.max(2, length*scaling);
+				
+				packet.first = senderBuffer.first;
+				packet.last = senderBuffer.first+length;
+				
+				tracer.addTrace({
+					type: 'pkg',
+					start: time,
+					end: displayLength+propagationTime, // relative
+					length: displayLength,
+					desc: {
+						top: 'seq '+packet.first + ' length '+length
+						//, start: time, end: displayLength+propagationTime
+					},
+					startLeft: true
+				});
+				ackReceived = false;
+				time += displayLength + propagationTime;
+				
+				
+				state = states.tryConsume;
+				break;
+			}
+			case states.tryConsume: {
+				// execute consumation
+				while(consumeTime < time || lastAckReceived == fileSize){
+					// consume only when buffer >= consumeLength except the last slice
+					if(receiverBuffer.getLength() < consumeLength && receiverBuffer.last != fileSize){ // consume later
+						tracer.addDesc({
+							time: consumeTime, 
+							text: 'not enough data to consume',
+							leftSide: false,
+							startLeft: true
+						});
+						
+						
+						consumeTime = time + 10 + 180*Math.random();
+						continue;
+					}
+					
+					
+					if(receiverBuffer.getLength() == 0 && receiverBuffer.last == fileSize)
+						break;
+					
+					var consume = Math.min(consumeLength, receiverBuffer.getLength());
+					
+					receiverBuffer.take(consume);
+					receiverApp.put(consume);
+					
+					tracer.addDesc({
+						time: consumeTime, 
+						text: 'app consumes '+consume+' bytes',
+						leftSide: false,
+						startLeft: true
+					});
+					
+					
+					tracer.addEvent({time: consumeTime, callback: 
+						(function breakReference(width, rec, length){
+							return function callbackProxy(){
+								$('#receiverApp > span').stop(true, true).animate({'width': width+'%'}, bufferAnimationDuration);
+								$('#receiverBuffer > span').stop(true, true).animate({'width': rec+'%'}, bufferAnimationDuration);
+							};
+						})( 
+							(receiverApp.getLength() )/fileSize*100, 
+							(receiverBuffer.getLength() )/bufferSize*100
+						)
+					});
+					
+					consumeTime = time + 10 + 180*Math.random();
+					if(lastAckReceived == fileSize)
+						time = consumeTime+1;
+				}
+				
+				if(lastAckReceived == fileSize)
+					state = states.exit;
+				else
+					state = states.receivePkt;
+				break;
+			}
+			case states.receivePkt: {
+				
+				
+				if(packet.getLength() > 0 && receiverBuffer.getLength()+packet.getLength() <= bufferSize){
+					// put data to receiverBuffer
+					receiverBuffer.put(packet.getLength());
+				}
+				
+				
+				
+				
+				tracer.addEvent({time: time, callback: 
+					(function breakReference(width){
+						return function callbackProxy(){
+							$('#receiverBuffer > span').stop(true, true).animate({'width': width+'%'}, bufferAnimationDuration, 'linear');
+						};
+					})( 
+						receiverBuffer.getLength()/bufferSize*100
+					)
+				});
+				
+				
+				advertisedWindow = bufferSize - receiverBuffer.getLength();
+				
+				// send new window size
+				tracer.addTrace({
+					type: 'ack',
+					start: time,
+					end: ackLength+propagationTime, // relative
+					length: ackLength,
+					desc: {
+						top: 'ack '+(receiverBuffer.last)+' win '+advertisedWindow,
+					},
+					startLeft: false
+				});
+				
+				time += ackLength + propagationTime;
+				
+				packet.first = packet.last = receiverBuffer.last;
+				
+				state = states.receiveAck;
+				break;
+			}
+			case states.receiveAck: {
+				// clear buffer
+				senderBuffer.take(packet.first - senderBuffer.first);
+				
+				
+				lastAckReceived = packet.first;
+				
+				tracer.addEvent({time: time, callback: 
+					(function breakReference(width2){
+						return function callbackProxy(){
+							$('#senderBuffer > span').stop(true, true).animate({'width': width2+'%'}, bufferAnimationDuration);
+						};
+					})( senderBuffer.getLength()/bufferSize*100 )
+				});
+				
+				if(senderBuffer.getLength() <= 0 && senderApp.getLength() <= 0 && lastAckReceived == fileSize){
+					state = states.tryConsume;
+					tracer.addDesc({
+						time: time, 
+						text: 'last ack received',
+						startLeft: true,
+						leftSide: true
+					});
+					//lastAckReceived = true;
+				}
+				else
+					state = states.fillSenderBuffer;
+				break;
+			}
+		}
+		
+		if(state == states.exit || time > 10000)
+			break;
+	}
+}
+
+
+
+
+		</script>
+	</head>
+	
+<body>
+	<h1>Flow Control</h1>
+	<p>This animation illustrates the interaction between a TCP sender and receiver. <br>Both of them have an application and a send/receive buffer.</p>
+	<p>The application at the senders side tries to transmit a file with a certain size to the Receiver.<br>
+	The application at the receivers side consumes chunks of 2Kbytes (except the very last one) from the send/receive buffer at random time.</p>
+	<p>When a packet is received the ack always contains the number of bytes the receiver has left in his buffer (advertised window). If the sender gets a advertised window size of 0 he just sends 1 byte until the application on the receivers side has consumed and so there is some space in the receivers buffer.</p>
+	
+	<form class="config">
+		<h2>configuration</h2>
+		
+		<div class="form-item disable disable-group0">
+			<h3><label for="fileSize">file size</label></h3>
+			<input type="range" name="fileSize" value="4096" min="4096" max="10240" step="512" id="fileSize" onchange="$(&#39;#fileSize2&#39;).attr(&#39;value&#39;, this.value+&#39; bytes&#39;);">
+			<input type="text" value="4096 bytes" id="fileSize2" disabled="disabled">
+			<div class="description">the size of the file the sender application wants to send to the receiver</div>
+		</div>
+		<div class="form-item disable disable-group0">
+			<h3><label for="bufferSize">buffer size</label></h3>
+			<input type="range" name="bufferSize" value="2048" min="2048" max="8192" step="512" id="bufferSize" onchange="$(&#39;#bufferSize2&#39;).attr(&#39;value&#39;, this.value+&#39; bytes&#39;);">
+			<input type="text" value="2048 bytes" id="bufferSize2" disabled="disabled">
+			<div class="description">size of the buffers</div>
+		</div>
+		<div class="form-item disable disable-group0">
+			<h3><label for="propagationTime">propagation time</label></h3>
+			<input type="range" name="propagationTime" value="2" min="2" max="5" step="0.5" id="propagationTime" onchange="$(&#39;#propagationTime2&#39;).attr(&#39;value&#39;, this.value+&#39; sec&#39;);">
+			<input type="text" value="2 sec" id="propagationTime2" disabled="disabled">
+			<div class="description">propagation time between sender and receiver</div>
+		</div>
+		
+		
+		<div class="form-item disable disable-group1 disabled">
+			<h3><label for="pause">pause</label></h3>
+			<input type="button" id="pause" onclick="" value="pause" disabled="disabled" class="temp-disabled">
+			<div class="description">pause or resume scrolling of the simulation</div>
+		</div>
+		<div class="form-item">
+			<h3><label for="start">start</label></h3>
+			<input type="button" id="start" onclick="" value="start">
+			<div class="description">start or restart the simulation</div>
+		</div>
+	</form>
+	
+	<div class="legend">
+		<h2>legend</h2>
+		<table>
+			<tbody><tr>
+				<td><div class="dscColor" style="background-color: #006A00;">&nbsp;</div></td>
+				<td>ack</td>
+			</tr>
+			<tr>
+				<td><div class="dscColor" style="background-color: #00adef;">&nbsp;</div></td>
+				<td>data</td>
+			</tr>
+		</tbody></table>
+	</div>
+	
+	<div class="simulation">
+		<div id="canvas-container" class="tracer" style="width: 1000px; height: 600px;"><canvas width="1000" height="600" class="background"></canvas><div class="visible" style="height: 500px; width: 1000px;"><div class="scroll" style="margin-top: 500px; width: 1000px;"><canvas width="1000" height="108.26666666666667" style="top: 0px;"></canvas><canvas width="1000" height="42" style="top: 108.267px;"></canvas><canvas width="1000" height="42" style="top: 150.267px;"></canvas><canvas width="1000" height="42" style="top: 192.267px;"></canvas><canvas width="1000" height="108.23333333333333" style="top: 234.267px;"></canvas><canvas width="1000" height="42" style="top: 342.5px;"></canvas><div class="desc" style="top: 0px; width: 197px; left: 3px; text-align: left;">sender puts 2048 bytes to buffer</div><div class="desc" style="top: 150.267px; width: 197px; left: 3px; text-align: left;">sender puts 2048 bytes to buffer</div><div class="desc" style="top: 189.874px; width: 797px; right: 3px; text-align: right;">app consumes 2048 bytes</div><div class="desc" style="top: 230.327px; width: 797px; right: 3px; text-align: right;">not enough data to consume</div><div class="desc" style="top: 384.5px; width: 197px; left: 3px; text-align: left;">last ack received</div><div class="desc" style="top: 487.331px; width: 797px; right: 3px; text-align: right;">app consumes 2048 bytes</div></div></div></div>
+		<div id="sender">
+			<div class="buffer" id="senderBuffer">buffer<span></span></div>
+			<div class="buffer" id="senderApp">application<span></span></div> 
+			<div>sender</div>
+		</div>
+		<div id="receiver">
+			<div class="buffer" id="receiverBuffer">buffer<span></span></div>
+			<div class="buffer" id="receiverApp">application<span></span></div> 
+			<div>receiver</div>
+		</div>
+	</div>
+	<p>coded by Johannes Kessler 2012</p>
+	<p>(Adopted and full credit attributed to Telecommunication Networks (TKN) at TU Berlin)</p>
+</body></html>
